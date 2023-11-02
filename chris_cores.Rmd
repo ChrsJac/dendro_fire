@@ -1,0 +1,334 @@
+---
+title: "jacobson_cores"
+output: github_document
+date: "2023-09-29"
+---
+
+load Packages 
+```{r}
+library(tidyverse)
+library(utils)
+library(dplR)
+library(reshape2) 
+```
+
+Core Data
+
+Load Data - Tree Core Ring Widths 
+```{r}
+jack_cores <- read_delim("jack_corescsdoneTAB_C.txt") %>% column_to_rownames(var = "Year")
+chris_cores <- read_delim("Chris_corescsTAB_C.txt") %>% column_to_rownames(var = "Year")
+```
+
+
+Data Cleaning 
+```{r }
+J_ids <- read.ids(jack_cores) %>% 
+  rownames_to_column("core_name") %>% 
+  mutate(core_name1 = str_sub(core_name, 1, -3)) %>% 
+  group_by(core_name1) %>% 
+  mutate(core1 = 1:n()) %>% 
+  ungroup() %>% 
+  select(core_name, core_name1, core1) %>% 
+  column_to_rownames("core_name") %>% 
+  rename(core = core1, tree = core_name1)
+  colnames(jack_cores) <- make.names(colnames(jack_cores))
+  
+C_ids <- read.ids(chris_cores) %>% 
+  rownames_to_column("core_name") %>% 
+  mutate(core_name1 = str_sub(core_name, 1, -3)) %>% 
+  group_by(core_name1) %>% 
+  mutate(core1 = 1:n()) %>% 
+  ungroup() %>% 
+  select(core_name, core_name1, core1) %>% 
+  column_to_rownames("core_name") %>% 
+  rename(core = core1, tree = core_name1)
+  colnames(chris_cores) <- make.names(colnames(chris_cores))
+  C_ids <- na.omit(C_ids)
+```
+
+Tree Means 
+```{r}
+  
+Jack_cores_rw <- treeMean(jack_cores, J_ids)
+chris_cores_rw <- treeMean(chris_cores, C_ids)
+```
+
+
+calculate bai - This converts ring-width series (mm) to ring-area series (mm squared) (aka basal area increments) based on the diameter of the tree and the width of each ring moving towards the pith of the tree.
+```{r}
+jack_cores_bai <- bai.out(Jack_cores_rw)
+chris_cores_bai <- bai.out(chris_cores_rw)
+```
+
+write to csv 
+```{r, eval=FALSE}
+#write.csv(jack_cores_bai, "D:/jack_cores/jack_cores_bai.csv", row.names = T)
+
+#write.csv(Jack_cores_rw, "D:/jack_cores/jack_cores_rw.csv", row.names = T)
+```
+
+```{r}
+bai_long <- jack_cores_bai %>% 
+  rownames_to_column("Year") %>% 
+  pivot_longer(!Year, names_to = "core_id", values_to = "measurement") %>% 
+  arrange(core_id, Year) %>%
+  separate(core_id, c("Forest", "Plot", "Tree"), "_") %>% 
+  mutate(Year = as.numeric(Year))
+
+TBbai_long <- chris_cores_bai %>% 
+  rownames_to_column("Year") %>% 
+  pivot_longer(!Year, names_to = "core_id", values_to = "measurement") %>% 
+  arrange(core_id, Year) %>%
+  separate(core_id, c("Forest", "Plot", "Tree"), "_") %>% 
+  mutate(Year = as.numeric(Year))
+```
+
+```{r}
+bai_CS <- bai_long %>% filter(Forest == "CS")
+
+bai_TW51 <- bai_long %>% filter(Forest == "TW51")
+
+bai_TB <- TBbai_long %>% filter(Forest == "TB")
+
+bai_CL<- TBbai_long %>% filter(Forest == "CL")
+```
+
+
+```{r}
+bai__avg_cs <- bai_CS %>%
+  subset(select = -c(Forest, Plot, Tree)) %>% 
+  group_by(Year) %>%
+  summarise(average = mean(measurement, na.rm = TRUE))
+
+
+ggplot(bai__avg_cs, aes(x = as.numeric(Year), y = average)) +
+  geom_line(stat="identity",color="brown") +
+  theme_minimal() +
+  labs(title="Average BAI by Year for Craig Springs", x="Year",  y = expression("Average BAI"(mm^2)))+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r}
+bai__avg_TW51 <- bai_TW51 %>%
+  subset(select = -c(Forest, Plot, Tree)) %>% 
+  group_by(Year) %>%
+  summarise(average = mean(measurement, na.rm = TRUE))
+
+
+ggplot(bai__avg_TW51, aes(x = as.numeric(Year), y = average)) +
+  geom_line(stat="identity",color="red") +
+  theme_minimal() +
+  labs(title="Average BAI by Year for Talking Warrior", x="Year", y = expression("Average BAI"(mm^2))) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+```{r}
+bai__avg_TB <- bai_TB %>%
+  subset(select = -c(Forest, Plot, Tree)) %>% 
+  group_by(Year) %>%
+  summarise(average = mean(measurement, na.rm = TRUE))
+
+
+p <-ggplot(bai__avg_TB, aes(x = as.numeric(Year), y = average)) +
+  geom_line(stat="identity",color="maroon") + 
+  theme_minimal() +
+  labs(title="Average BAI by Year for Tombigbee", x="Year", y = expression("Average BAI" (mm^2)))+
+  theme(plot.title = element_text(hjust = 0.5))
+  p + scale_x_continuous(breaks = seq(min(bai__avg_TB$Year), max(bai__avg_TB$Year), by = 5), labels = seq(min(bai__avg_TB$Year), max(bai__avg_TB$Year), by = 5))
+```
+```{r}
+bai__avg_CL <- bai_CL %>%
+  subset(select = -c(Forest, Plot, Tree)) %>% 
+  group_by(Year) %>%
+  summarise(average = mean(measurement, na.rm = TRUE))
+
+CL_avgplot<-ggplot(bai__avg_CL, aes(x = as.numeric(Year), y = average)) +
+  geom_line(stat="identity",color="sienna") +
+  theme_minimal() +
+  labs(title="Average BAI by Year for Chocktaw Lake", x="Year", y = expression("Average BAI"(mm^2))) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  coord_cartesian(xlim = c(1999, max(bai_CL$Year)))
+print(CL_avgplot)
+```
+
+
+
+
+```{r}
+bai__avg <- bai_long %>%
+  subset(select = -c(Forest, Plot, Tree)) %>% 
+  group_by(Year) %>%
+  summarise(average = mean(measurement, na.rm = TRUE))
+
+
+ggplot(bai__avg, aes(x = Year, y = average)) +
+  geom_col() + 
+  labs(title="Average BAI by Year", x="Year", y="Average BAI") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r}
+bai__avg <- TBbai_long %>%
+  subset(select = -c(Forest, Plot, Tree)) %>% 
+  group_by(Year) %>%
+  summarise(average = mean(measurement, na.rm = TRUE))
+
+
+ggplot(bai__avg, aes(x = Year, y = average)) +
+  geom_col() + 
+  labs(title="Average BAI by Year", x="Year", y="Average BAI")
+
+```
+```{r}
+# Filter the data for Craig Springs (CS)
+bai_CS <- bai_long %>% filter(Forest == "CS")
+
+# Create a single plot for all CS plots
+combined_plot_CS <- ggplot(bai_CS, aes(x = as.numeric(Year), y = measurement, color = Plot)) +
+  geom_line() +
+  theme_minimal(base_size = 18) +
+  labs(title = "Craig Springs", x = "Year", y = expression("Average BAI"(mm^2))) +
+ theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none") +
+  geom_vline(xintercept = 2020)
+ggsave(combined_plot_CS, filename = "combined_plot_CS.png", dpi = 600, width = 12, height = 7, units = "in")
+
+```
+```{r}
+# Filter the data for Talking Warrior (TW51)
+bai_TW51 <- bai_long %>% filter(Forest == "TW51")
+
+# Create a single plot for all TW51 plots
+(combined_plot_TW51 <- ggplot(bai_TW51, aes(x = as.numeric(Year), y = measurement, color = Plot)) +
+  geom_line() +
+  theme_minimal(base_size = 18) +
+  labs(title = "Talking Warrior", x = "Year", y = expression("Average BAI"(mm^2))) +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none") +
+  geom_vline(xintercept = 2020))
+
+ggsave(combined_plot_TW51, filename = "combined_plot_TW51.png", dpi = 600, width = 12, height = 7, units = "in")
+
+# Display the combined plot for Talking Warrior
+#print(combined_plot_TW51)
+```
+
+
+```{r}
+bai_TB <- TBbai_long %>% filter(Forest == "TB")
+
+(combined_plot_TB <- ggplot(bai_TB, aes(x = as.numeric(Year), y = measurement, color = Plot)) +
+  geom_line() +
+  theme_minimal(base_size = 18) +
+  labs(title = "Tombigbee", x = "Year", y = expression("Average BAI"(mm^2)))+
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none") +
+  geom_vline(xintercept = 2017))
+  
+ggsave(combined_plot_TB, filename = "combined_plot_TB.png", dpi = 600, width = 12, height = 7, units = "in")
+ 
+```
+
+```{r}
+bai_CL <- TBbai_long %>% filter(Forest == "CL")
+bai_CL <- bai_CL %>% mutate(Year = as.numeric(Year))
+
+(combined_plot_CL <- ggplot(bai_CL, aes(x = as.numeric(Year), y = measurement, color = Plot)) +
+  geom_line() +
+  theme_minimal(base_size = 18) +
+  labs(title = "Choctaw Lake", x = "Year", y = expression("Average BAI"(mm^2))) +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none") +
+    coord_cartesian(xlim = c(2000, max(bai_CL$Year)))+
+    geom_vline(xintercept = 2017))
+    
+
+  
+ggsave(combined_plot_CL, filename = "combined_plot_CL.png", dpi = 600, width = 12, height = 7, units = "in")
+
+  
+```
+```{r}
+starr_burn <- 2020
+fs_burn <- 2017
+
+fire_pre_post_bai_CS <-
+  bai_CS %>%
+  filter(between(Year, starr_burn - 2, starr_burn + 2)) %>%
+  mutate(period = case_when(Year < starr_burn ~ "pre",
+                            Year > starr_burn ~ "post",
+                            TRUE ~ "burn")) %>% 
+  group_by(Plot, period) %>% 
+  summarise(mean_bai = mean(measurement),
+            stand = "CS")
+
+fire_pre_post_bai_TW51 <-
+  bai_TW51 %>%
+  filter(between(Year, starr_burn - 2, starr_burn + 2)) %>%
+  mutate(period = case_when(Year < starr_burn ~ "pre",
+                            Year > starr_burn ~ "post",
+                            TRUE ~ "burn")) %>% 
+  group_by(Plot, period) %>% 
+  summarise(mean_bai = mean(measurement),
+            stand = "TW51")
+
+
+fire_pre_post_bai_TB <-
+  bai_TB %>%
+  filter(between(Year, fs_burn - 2, fs_burn + 2)) %>%
+  mutate(period = case_when(Year < fs_burn ~ "pre",
+                            Year > fs_burn ~ "post",
+                            TRUE ~ "burn")) %>%   
+  group_by(Plot, period) %>% 
+  summarise(mean_bai = mean(measurement),
+            stand = "TB")
+
+
+fire_pre_post_bai_CL <-
+  bai_CL %>%
+  filter(between(Year, fs_burn - 2, fs_burn + 2)) %>%
+  mutate(period = case_when(Year < fs_burn ~ "pre",
+                            Year > fs_burn ~ "post",
+                            TRUE ~ "burn")) %>%   
+  group_by(Plot, period) %>% 
+  summarise(mean_bai = mean(measurement),
+            stand = "CL")
+
+
+```
+
+Combine everything together
+```{r}
+fire_bai_data <- fire_pre_post_bai_CS %>% 
+  bind_rows(fire_pre_post_bai_CL) %>% 
+  bind_rows(fire_pre_post_bai_TB) %>% 
+  bind_rows(fire_pre_post_bai_TW51) %>% 
+  filter(period != "burn") %>% 
+  mutate(period = factor(period, levels = c("pre", "post")))
+```
+
+
+```{r}
+m1 <- lm(mean_bai ~ period, data = fire_bai_data)
+summary(m1)
+```
+
+
+```{r}
+library(lme4)
+library(lmerTest)
+
+mm1 <- lmer(mean_bai ~ period + (1|stand), data = fire_bai_data)
+summary(mm1)
+
+mm2 <- lmer(mean_bai ~ period + (1|stand/Plot), data = fire_bai_data)
+summary(mm2)
+```
+
+
+...using a linear mixed model with the lme4 and lmerTest packages. Random effects included tree nested within stand.
+
