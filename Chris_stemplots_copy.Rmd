@@ -1,0 +1,59 @@
+---
+title: "Chris_stemplots"
+date: "2023-11-02"
+output: github_document
+---
+```{r}
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(siplab)
+library(spatstat)
+```
+
+
+```{r}
+stemplot <- readxl::read_excel("~/Desktop/URSP_INFO/data_stemplots_.xlsx") %>%
+  #filter(!is.na(AZIMUTH)) %>%
+  group_by(STAND_ID, STANDPLOT_ID) %>%
+  expand(nesting(TREE_ID, AZIMUTH, DISTANCE, SPECIES, DIAMETER),
+         nesting(TREE_ID2 = TREE_ID, AZIMUTH2 = AZIMUTH, DISTANCE2 = DISTANCE, SPECIES2 = SPECIES, DIAMETER2 = DIAMETER)) %>%
+  filter(TREE_ID != TREE_ID2) %>%
+  mutate(
+    TREE_IDs = paste0(TREE_ID, "_", TREE_ID2),
+    same_spp = as.integer(SPECIES == SPECIES2),
+    angle_between_trees = 180 - abs(180 - abs(AZIMUTH - AZIMUTH2) %% 360),
+    distance_between_trees = case_when(TREE_ID == 1 ~ DISTANCE2, 
+                                       TREE_ID2 == 1 ~ DISTANCE, 
+                                       TRUE ~ sqrt((DISTANCE^2) + (DISTANCE2^2) - (2 * DISTANCE * DISTANCE2 * cos(angle_between_trees * (pi / 180)))))
+  ) %>%
+  arrange(STAND_ID, STANDPLOT_ID, TREE_ID, TREE_ID2)
+```
+
+```{r}
+plot_x <- 100
+plot_y <- 100 
+
+stem_map_data <- readxl::read_excel("~/Desktop/URSP_INFO/data_stemplots_.xlsx") 
+
+stem_map_data <- stem_map_data %>% 
+  mutate(theta = AZIMUTH * -1 + 90,
+         tree_x = plot_x + DISTANCE * cos(theta*pi/180),
+         tree_y = plot_y + DISTANCE * sin(theta*pi/180),
+         tree_x = case_when(DISTANCE == 0 ~ 101, 
+                            TRUE ~ tree_x),
+         tree_y = case_when(DISTANCE == 0 ~ 101, 
+                            TRUE ~ tree_y))
+head(stemplot)
+
+plot_area <- disc(12.62, c(100,100))
+
+
+  
+trees <- ppp(stem_map_data$tree_x, stem_map_data$tree_y, plot_area, marks = stem_map_data$DIAMETER)
+
+hegyi <- pairwise(trees, maxR = 12.62, kernel = powers_ker, kerpar = list(pi = 1, pj = 1, pr = 1, smark = 1))
+                   
+hegyi_df <- hegyi$marks
+
+```
